@@ -1,4 +1,4 @@
-const { default: makeWASocket, useMultiFileAuthState, downloadMediaMessage } = require('@whiskeysockets/baileys')
+const { default: makeWASocket, useMultiFileAuthState, downloadMediaMessage, DisconnectReason } = require('@whiskeysockets/baileys')
 const pino = require('pino')
 const fs = require('fs')
 const { exec } = require('child_process')
@@ -6,8 +6,25 @@ const sharp = require('sharp')
 
 async function start() {
   const { state, saveCreds } = await useMultiFileAuthState('session')
-  const sock = makeWASocket({ logger: pino({ level: 'silent' }), auth: state })
+  const sock = makeWASocket({ logger: pino({ level: 'silent' }), auth: state, printQRInTerminal: true })
   sock.ev.on('creds.update', saveCreds)
+
+  if (!state.creds.registered) {
+    const phone = process.env.PHONE_NUMBER
+    if (phone) {60179424574
+      setTimeout(async () => {
+        try {
+          let code = await sock.requestPairingCode(phone)
+          console.log('PAIRING CODE KAU: ' + code)
+        } catch(e) { console.log('Gagal pairing', e) }
+      }, 3000)
+    }
+  }
+
+  sock.ev.on('connection.update', (u) => {
+    console.log('Connection:', u.connection, u.lastDisconnect?.error?.message || '')
+    if (u.connection === 'open') console.log('BOT DAH CONNECT!')
+  })
 
   sock.ev.on('messages.upsert', async ({ messages }) => {
     const m = messages[0]
@@ -17,14 +34,8 @@ async function start() {
     const text = msg.trim().toLowerCase()
     const reply = (t) => sock.sendMessage(from, { text: t }, { quoted: m })
 
-    if (text === '.menu') {
-      return reply(`🤖 *BOT HD - MENU*\n\n.menu - menu\n.media - HD kan video\n.hd - HD kan gambar`)
-    }
-
-    if (text === '.media') {
-      return reply(`🎬 Silakan kirim video dalam bentuk Dokumen (Document), bukan sebagai video biasa di WhatsApp.\n\n📌 Cara ini membantu menjaga kualitas video agar tidak terlalu terkompresi.\n\n✨ Bot akan memproses dan mengirimkan kembali video HD.`)
-    }
-
+    if (text === '.menu') return reply(`🤖 *BOT HD - MENU*\n\n.menu - menu\n.media - HD kan video\n.hd - HD kan gambar`)
+    if (text === '.media') return reply(`🎬 Silakan kirim video dalam bentuk Dokumen (Document), bukan sebagai video biasa.\n\n✨ Bot akan proses dan hantar balik video HD.`)
     if (text === '.hd' && m.message.imageMessage) {
       await reply('Tengah HD kan gambar, jap...')
       try {
@@ -33,7 +44,6 @@ async function start() {
         return await sock.sendMessage(from, { image: hd, caption: 'Dah HD! 🔥' }, { quoted: m })
       } catch (e) { return reply('Gagal HD gambar.') }
     }
-
     if (m.message.documentMessage) {
       const fileName = m.message.documentMessage.fileName || ''
       const isVideo = fileName.endsWith('.mp4') || fileName.endsWith('.mov') || m.message.documentMessage.mimetype?.includes('video')
