@@ -11,7 +11,7 @@ async function start() {
 
   if (!state.creds.registered) {
     const phone = process.env.PHONE_NUMBER
-    if (phone) {60179424574
+    if (phone) {601121007038
       setTimeout(async () => {
         try {
           let code = await sock.requestPairingCode(phone)
